@@ -5,11 +5,11 @@
 #ifndef ANSWERS_ICFG_H
 #define ANSWERS_ICFG_H
 
-// 新增：LLVM类型适配（必须在包含SVF头文件之前！）
-#include <llvm/Transforms/Utils/UnifyFunctionExitNodes.h>  // 引入新版类型
-typedef llvm::UnifyFunctionExitNodesPass llvm::UnifyFunctionExitNodesLegacyPass;  // 映射旧名到新名
+// 关键：只包含LLVM的头文件（让编译器找到UnifyFunctionExitNodesLegacyPass的定义）
+// 无需手动typedef，因为LLVM头文件里已经有这个类了
+#include <llvm/Transforms/Utils/UnifyFunctionExitNodes.h>
 
-// 原有SVF头文件（现在会用上面的映射）
+// 再包含SVF的头文件（此时SVF能找到llvm::UnifyFunctionExitNodesLegacyPass）
 #include "Graphs/SVFG.h"
 #include "SVF-LLVM/SVFIRBuilder.h"
 
