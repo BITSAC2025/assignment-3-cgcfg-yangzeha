@@ -1,30 +1,59 @@
 /**
- * ICFG.h
+ * cfga_lib.cpp
  * @author kisslune 
  */
-#ifndef ANSWERS_ICFG_H
-#define ANSWERS_ICFG_H
 
-// 关键：只包含LLVM的头文件（让编译器找到UnifyFunctionExitNodesLegacyPass的定义）
-// 无需手动typedef，因为LLVM头文件里已经有这个类了
-#include <llvm/Transforms/Utils/UnifyFunctionExitNodes.h>
+#include "CFGA.h"
+#include <fstream>
 
-// 再包含SVF的头文件（此时SVF能找到llvm::UnifyFunctionExitNodesLegacyPass）
-#include "Graphs/SVFG.h"
-#include "SVF-LLVM/SVFIRBuilder.h"
+using namespace SVF;
+using namespace llvm;
+using namespace std;
 
-class CFGAnalysis
+
+CFGAnalysis::CFGAnalysis(SVF::ICFG *icfg)
 {
-public:
-    explicit CFGAnalysis(SVF::ICFG *icfg);
-    void analyze(SVF::ICFG *icfg);
-    void dumpPaths();
-protected:
-    void recordPath(const std::vector<unsigned> &path);
-    std::stack<unsigned> callStack;
-    std::set<unsigned> sources;
-    std::set<unsigned> sinks;
-    std::set<std::vector<unsigned>> reachablePaths;
-};
+    for (auto &it : *icfg)
+    {
+        auto node = it.second;
+        if (auto fEntry = dyn_cast<FunEntryICFGNode>(node))
+        {
+            if (fEntry->getFun()->getName() == "main")
+                sources.insert(it.first);
+        }
+        if (auto fExit = dyn_cast<FunExitICFGNode>(node))
+        {
+            if (fExit->getFun()->getName() == "main")
+                sinks.insert(it.first);
+        }
+    }
+}
 
-#endif //ANSWERS_ICFG_H
+
+void CFGAnalysis::recordPath(const std::vector<unsigned int>& path)
+{
+    if (path.empty())
+        return;
+    reachablePaths.insert(path);
+}
+
+
+void CFGAnalysis::dumpPaths()
+{
+    std::string fname = PAG::getPAG()->getModuleIdentifier() + ".res.txt";
+    std::ofstream outFile(fname, std::ios::out);
+    if (!outFile)
+    {
+        std::cout << "error opening " + fname + "!!\n";
+        return;
+    }
+
+    for (auto &path : reachablePaths)
+    {
+        for (auto node : path)
+            outFile << node << ", ";
+        outFile << endl;
+    }
+
+    outFile.close();
+}
