@@ -5,7 +5,6 @@
 
 #include "Graphs/SVFG.h"
 #include "SVF-LLVM/SVFIRBuilder.h"
-#include <Graphs/CallGraph.h>
 
 using namespace SVF;
 using namespace llvm;
@@ -30,26 +29,23 @@ int main(int argc, char** argv)
 
     moduleNameVec = OptionBase::parseOptions(arg_num, arg_value, "SVF IR", "[options] <input-bitcode...>");
 
-    LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(moduleNameVec);
+    LLVMModuleSet::buildSVFModule(moduleNameVec);
 
-    // Instantiate an SVFIR builder
     SVFIRBuilder builder;
     cout << "Generating SVFIR(PAG), call graph and ICFG ..." << endl;
 
-    // TODO: here, generate SVFIR(PAG), call graph and ICFG, and dump them to files
+    // TODO: here, generate SVFIR(PAG), call graph and ICFG to files
     //@{
-    SVFIR* pag = builder.build();
-
-    // 修正1: getCallGraph() 返回的是const指针
-    CallGraph* cg = const_cast<CallGraph*>(pag->getCallGraph());
-    ICFG* icgf = pag->getICFG();
-
-    // 修正2: dump()函数现在需要文件名参数
+    auto pag = builder.build();
     pag->dump();
-    cg->dump();
-    icgf->dump();
 
+    auto cg = pag->getCallGraph();
+    cg->dump();
+
+    auto icfg = pag->getICFG();
+    icfg->dump();
     //@}
 
-    return 0;
+    LLVMModuleSet::releaseLLVMModuleSet();
+	return 0;
 }

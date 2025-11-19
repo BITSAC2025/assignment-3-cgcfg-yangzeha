@@ -2,11 +2,8 @@
  * ICFG.cpp
  * @author kisslune 
  */
+
 #include "CFGA.h"
-// 新增必要头文件：嵌套递归、ICFG节点/边定义（补充ICFGEdge头文件）
-#include <functional>
-#include "Graphs/ICFG.h"
-#include "Graphs/ICFGEdge.h"  // 新增：确保ICFGEdge类型被正确识别
 
 using namespace SVF;
 using namespace llvm;
@@ -25,55 +22,76 @@ int main(int argc, char **argv)
     auto icfg = pag->getICFG();
 
     CFGAnalysis analyzer = CFGAnalysis(icfg);
-    analyzer.analyze(icfg);
 
+    // TODO: complete the following method: 'CFGAnalysis::analyze'
+    analyzer.analyze(icfg);
     analyzer.dumpPaths();
     LLVMModuleSet::releaseLLVMModuleSet();
     return 0;
 }
 
-// 核心实现：DFS遍历ICFG（适配SVF旧版接口）
+
 void CFGAnalysis::analyze(SVF::ICFG *icfg)
 {
+    // Sources and sinks are specified when an analyzer is instantiated.
     for (auto src : sources)
-    {
         for (auto snk : sinks)
         {
-            vector<unsigned> currentPath;
-            set<unsigned> visitedNodes;
+            // TODO: DFS the graph, starting from src and detecting the paths ending at snk.
+            // Use the class method 'recordPath' (already defined) to record the path you detected.
+            //@{
+            std::set<unsigned> visited;
+            std::vector<unsigned> path;
+            dfs(src,snk,icfg,visited,path);
+            //@}
+        }
+}
 
-            // 嵌套DFS递归函数
-            function<void(unsigned)> dfs = [&](unsigned currentNodeId) {
-                currentPath.push_back(currentNodeId);
-                visitedNodes.insert(currentNodeId);
+void CFGAnalysis::dfs(unsigned src, unsigned snk, SVF::ICFG *icfg,
+                      std::set<unsigned> &visited, std::vector<unsigned> &path) {
+    if (!visited.insert(src).second) {
+        return; 
+    }
 
-                // 到达main出口，记录路径
-                if (currentNodeId == snk)
-                {
-                    this->recordPath(currentPath);
+    path.push_back(src);
+
+    if (src == snk) {
+        recordPath(path);
+    } else {
+        const auto *node = icfg->getICFGNode(src);
+        const auto &outEdges = node->getOutEdges();
+
+        for (const auto *e : outEdges) {
+            const auto *dstNode = e->getDstNode();
+            const unsigned id = dstNode->getId();
+
+            if (e->isIntraCFGEdge()) {
+                dfs(id, snk, icfg, visited, path);
+            } 
+            else if (e->isCallCFGEdge()) {
+                const auto *callEdge = llvm::dyn_cast<CallCFGEdge>(e);
+                const unsigned callId = callEdge->getCallSite()->getId();
+
+                callStack.push(callId);
+                dfs(id, snk, icfg, visited, path);
+                callStack.pop();
+            } 
+            else if (e->isRetCFGEdge()) {
+                const auto *retEdge = llvm::dyn_cast<RetCFGEdge>(e);
+                const unsigned callId = retEdge->getCallSite()->getId();
+
+                if (callStack.empty()) {
+                    dfs(id, snk, icfg, visited, path);
+                } 
+                else if (callStack.top() == callId) {
+                    callStack.pop();
+                    dfs(id, snk, icfg, visited, path);
+                    callStack.push(callId);
                 }
-                else
-                {
-                    // 关键修改：用getOutEdges()替代getSuccs()（SVF旧版接口）
-                    ICFGNode* currentNode = icfg->getICFGNode(currentNodeId);
-                    // getOutEdges()返回当前节点的所有出边，直接遍历边指针
-                    for (ICFGEdge* succEdge : currentNode->getOutEdges())
-                    {
-                        // 从边中获取目标节点ID（逻辑不变）
-                        unsigned nextNodeId = succEdge->getDstNode()->getId();
-                        if (visitedNodes.find(nextNodeId) == visitedNodes.end())
-                        {
-                            dfs(nextNodeId);
-                        }
-                    }
-                }
-
-                // 回溯：恢复路径和访问状态
-                currentPath.pop_back();
-                visitedNodes.erase(currentNodeId);
-            };
-
-            dfs(src);  // 从main入口开始DFS
+            }
         }
     }
+
+    visited.erase(src);
+    path.pop_back();
 }
